@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบคำนวณราคาซื้อไม้ - Natt Wood</title>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+
+        .card {
+            background-color: rgba(255, 255, 255, 0.9); /* โปร่งแสงเล็กน้อย */
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 15px; /* ความโค้งมน */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        input[type="text"], input[type="number"], input[type="email"], input[type="password"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin: 8px 0 15px 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            background-color: #f9f9f9;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            margin: 8px 5px 8px 0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #plot-form label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        
+        /* จัดกลุ่มตัวเลือก */
+        .option-group, .sub-options {
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background-color: rgba(240, 240, 240, 0.8);
+        }
+
+        /* Results Display */
+        .results-display {
+            margin-top: 20px;
+            padding: 15px;
+            border: 2px solid #2196F3;
+            border-radius: 10px;
+            background-color: rgba(33, 150, 243, 0.05);
+        }
+
+        .final-result {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #FF5722;
+        }
+
+        /* Dashboard Table */
+        #plots-dashboard table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        #plots-dashboard th, #plots-dashboard td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #plots-dashboard th {
+            background-color: #f2f2f2;
+        }
+
+        /* Mobile Responsiveness */
+        @media screen and (max-width: 600px) {
+            .container {
+                margin: 10px;
+                padding: 10px;
+            }
+            input[type="text"], input[type="number"], input[type="email"], input[type="password"] {
+                width: 100%;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        footer {
+            text-align: center;
+            padding: 10px;
+            color: #888;
+            font-size: 0.8em;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-page" class="container">
+        <div class="card login-card">
+            <h2>เข้าสู่ระบบระบบคำนวณราคาซื้อไม้</h2>
+            <p>ผู้ดูแล: nattapongkha838@gmail.com (ผู้อนุมัติการใช้งาน)</p>
+            <input type="email" id="login-email" placeholder="อีเมล">
+            <input type="password" id="login-password" placeholder="รหัสผ่าน">
+            <button onclick="loginUser()">เข้าสู่ระบบ</button>
+            <button onclick="registerUser()">สมัครใช้งาน</button>
+            <p id="auth-message" style="color: red; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <div id="dashboard-page" class="container hidden">
+        <header style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>แดชบอร์ดระบบคำนวณราคา</h1>
+            <button onclick="logoutUser()">ออกจากระบบ</button>
+        </header>
+        
+        <div class="card data-display">
+            <h2>📊 ข้อมูลแปลงที่บันทึกทั้งหมด</h2>
+            <div id="plots-dashboard">
+                <p>กำลังโหลดข้อมูล...</p>
+            </div>
+        </div>
+
+        <div class="card calculation-form">
+            <h2>➕ เพิ่มข้อมูลการคำนวณแปลงใหม่</h2>
+            <form id="plot-form">
+                <p style="font-style: italic; color: #555;">กรอกข้อมูลและกด "คำนวณ" ก่อน "บันทึกข้อมูล"</p>
+                
+                <label for="plotName">1. ชื่อแปลง:</label>
+                <input type="text" id="plotName" required>
+
+                <label for="sellingPrice">2. ราคาที่เสนอขาย (บาท):</label>
+                <input type="number" id="sellingPrice" value="0" step="0.01" required>
+                
+                <label for="logWeight">3. น้ำหนักไม้ท่อน (กก.):</label>
+                <input type="number" id="logWeight" value="0" required>
+                <label for="fuelWeight">4. น้ำหนักไม้ฟืน (กก.):</label>
+                <input type="number" id="fuelWeight" value="0" required>
+                
+                <label for="logPrice">5. ราคาไม้ท่อน (ตัวอย่าง: 2.00 บาท/กก.):</label>
+                <input type="number" id="logPrice" value="2.00" step="0.01" required>
+                <label for="fuelPrice">6. ราคาไม้ฟืน (ตัวอย่าง: 1.00 บาท/กก.):</label>
+                <input type="number" id="fuelPrice" value="1.00" step="0.01" required>
+                
+                <fieldset class="option-group">
+                    <legend>7. ค่าล้ม หรือ โค่น:</legend>
+                    <label><input type="radio" name="fallType" value="fall" onchange="toggleFallDetails()" checked> ล้ม (คิดเป็นไร่: 3000 บาท/ไร่)</label>
+                    <label><input type="radio" name="fallType" value="chop" onchange="toggleFallDetails()"> โค่น (คิดตามน้ำหนัก: 0.12 บาท/กก.)</label>
+                </fieldset>
+                <div id="fall-details" class="sub-options">
+                    <label for="raiAmount">จำนวนไร่ (ใช้สำหรับ *ค่าล้ม* และ *ค่าจัดการพื้นที่*):</label>
+                    <input type="number" id="raiAmount" value="0" step="0.01">
+                </div>
+                
+                <fieldset class="option-group">
+                    <legend>8. ตัวเลือก เผา หรือ ไถ หรือทั้งหมด หรือไม่เผา ไถ:</legend>
+                    <label><input type="checkbox" name="landManage" value="burn"> เผา</label>
+                    <label><input type="checkbox" name="landManage" value="plow"> ไถ</label>
+                    <label><input type="checkbox" name="landManage" value="none" checked> ไม่เผา/ไถ</label>
+                </fieldset>
+                <div id="manage-details" class="sub-options">
+                    <label for="burnPricePerRai">ค่าเผา (บาท/ไร่):</label>
+                    <input type="number" id="burnPricePerRai" value="0" step="0.01">
+                    <label for="plowPricePerRai">ค่าไถ (บาท/ไร่):</label>
+                    <input type="number" id="plowPricePerRai" value="0" step="0.01">
+                </div>
+                
+                <label for="machinePrice">9. ค่าเครื่อง (ตัวอย่าง: 0.12 บาท/กก.รวม):</label>
+                <input type="number" id="machinePrice" value="0.12" step="0.01" required>
+                <label for="extinguishPrice">10. ค่าดับ (ตัวอย่าง: 0.06 บาท/กก.รวม):</label>
+                <input type="number" id="extinguishPrice" value="0.06" step="0.01" required>
+                <label for="clipPrice">11. ค่าคีบ (ตัวอย่าง: 0.06 บาท/กก.รวม):</label>
+                <input type="number" id="clipPrice" value="0.06" step="0.01" required>
+                
+                <label for="logTransportPrice">12. ค่าบรรทุกไม้ท่อน (ตัวอย่าง: 0.18 บาท/กก.):</label>
+                <input type="number" id="logTransportPrice" value="0.18" step="0.01" required>
+                <label for="fuelTransportPrice">12. ค่าบรรทุกไม้ฟืน (ตัวอย่าง: 0.15 บาท/กก.):</label>
+                <input type="number" id="fuelTransportPrice" value="0.15" step="0.01" required>
+                
+                <label for="brokerFee">13. ค่านายหน้า (บาท):</label>
+                <input type="number" id="brokerFee" value="0" step="0.01">
+                
+                <label for="dailyExpenseDays">14. จำนวนวันสำหรับค่าใช้จ่าย:</label>
+                <input type="number" id="dailyExpenseDays" value="0" required>
+                <label for="dailyExpenseAmount">14. จำนวนเงิน/วัน (ตัวอย่าง: 400 บาท/วัน):</label>
+                <input type="number" id="dailyExpenseAmount" value="400" step="0.01" required>
+
+                <button type="button" onclick="calculateAndDisplay()">คำนวณ</button>
+                <button type="submit" id="save-button" disabled>บันทึกข้อมูล</button>
+            </form>
+
+            <div id="results" class="results-display">
+                <h3>💰 ผลการคำนวณ:</h3>
+                <p>จำนวนเงินที่ขายไม้ได้ (ไม้+ราคาเสนอขาย): <span id="total-wood-sales">0.00</span> บาท</p>
+                <p>จำนวนเงินค่าใช้จ่ายทั้งหมด (ข้อ 7-14): <span id="total-expenses">0.00</span> บาท</p>
+                <p class="final-result">จำนวนเงินที่สามารถซื้อได้ (กำไร/ขาดทุน): <span id="final-purchase-price">0.00</span> บาท</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        &copy; Nattapong Khawnuy | นายณัฐพงศ์ ขาวนุ้ย
+    </footer>
+
+    <script>
+        // --- 3.1 การตั้งค่า Firebase ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCQHC4eKzfx58hRIcoCe_T9-mQ0TP8sdfM",
+            authDomain: "natt-wood.firebaseapp.com",
+            projectId: "natt-wood",
+            storageBucket: "natt-wood.firebasestorage.app",
+            messagingSenderId: "933382154771",
+            appId: "1:933382154771:web:d3dc315e622fcbb9c7ede6",
+            measurementId: "G-HR13T9WFSN"
+        };
+        
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const ADMIN_EMAIL = 'nattapongkha838@gmail.com';
+
+        // --- 3.2 ฟังก์ชัน Auth และ UI Management ---
+
+        function togglePages(showPageId, hidePageId) {
+            document.getElementById(showPageId).classList.remove('hidden');
+            document.getElementById(hidePageId).classList.add('hidden');
+        }
+
+        auth.onAuthStateChanged(user => {
+            if (user && user.emailVerified) { // สมมติว่า Admin ต้อง verify email ด้วย
+                togglePages('dashboard-page', 'login-page');
+                fetchPlotsData(); // โหลดข้อมูลเมื่อเข้าสู่ระบบสำเร็จ
+            } else {
+                togglePages('login-page', 'dashboard-page');
+            }
+        });
+
+        function loginUser() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const msg = document.getElementById('auth-message');
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    // Check if user is approved (ต้องทำผ่าน Firebase Security Rules/Cloud Functions)
+                    // For now, we assume successful login is approved.
+                    msg.textContent = "เข้าสู่ระบบสำเร็จ!";
+                })
+                .catch(error => {
+                    msg.textContent = "เข้าสู่ระบบล้มเหลว: " + error.message;
+                });
+        }
+
+        function registerUser() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const msg = document.getElementById('auth-message');
+
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(userCredential => {
+                    // ส่งอีเมลยืนยัน (ถ้าต้องการ)
+                    // userCredential.user.sendEmailVerification();
+                    msg.textContent = "สมัครสำเร็จ! โปรดรอการอนุมัติจากผู้ดูแล (" + ADMIN_EMAIL + ")";
+                    // ในระบบจริง: ต้องสร้าง user record ใน Firestore และรอ Admin ตั้งค่า 'approved: true'
+                    auth.signOut(); // บังคับ Logout ให้รอการอนุมัติ
+                })
+                .catch(error => {
+                    msg.textContent = "สมัครล้มเหลว: " + error.message;
+                });
+        }
+
+        function logoutUser() {
+            auth.signOut().then(() => {
+                document.getElementById('auth-message').textContent = "";
+            });
+        }
+
+        // --- 3.3 ฟังก์ชันการคำนวณหลัก ---
+        const FALL_PRICE_PER_RAI = 3000;      // 7. ล้มคิดเป็นไร่ (บาท/ไร่)
+        const CHOP_PRICE_PER_KG = 0.12;       // 7. โค่นคิดตามน้ำหนัก (บาท/กก.)
+        
+        function calculateAndDisplay() {
+            // 1. ดึงข้อมูลจากฟอร์ม
+            const logWeight = parseFloat(document.getElementById('logWeight').value) || 0;
+            const fuelWeight = parseFloat(document.getElementById('fuelWeight').value) || 0;
+            const logPrice = parseFloat(document.getElementById('logPrice').value) || 0;
+            const fuelPrice = parseFloat(document.getElementById('fuelPrice').value) || 0;
+            const sellingPrice = parseFloat(document.getElementById('sellingPrice').value) || 0;
+
+            const fallType = document.querySelector('input[name="fallType"]:checked').value;
+            const raiAmount = parseFloat(document.getElementById('raiAmount').value) || 0;
+
+            const burnChecked = document.querySelector('input[name="landManage"][value="burn"]').checked;
+            const plowChecked = document.querySelector('input[name="landManage"][value="plow"]').checked;
+            const burnPricePerRai = parseFloat(document.getElementById('burnPricePerRai').value) || 0;
+            const plowPricePerRai = parseFloat(document.getElementById('plowPricePerRai').value) || 0;
+            
+            const machinePrice = parseFloat(document.getElementById('machinePrice').value) || 0;
+            const extinguishPrice = parseFloat(document.getElementById('extinguishPrice').value) || 0;
+            const clipPrice = parseFloat(document.getElementById('clipPrice').value) || 0;
+            
+            const logTransportPrice = parseFloat(document.getElementById('logTransportPrice').value) || 0;
+            const fuelTransportPrice = parseFloat(document.getElementById('fuelTransportPrice').value) || 0;
+            const brokerFee = parseFloat(document.getElementById('brokerFee').value) || 0;
+            const dailyExpenseDays = parseFloat(document.getElementById('dailyExpenseDays').value) || 0;
+            const dailyExpenseAmount = parseFloat(document.getElementById('dailyExpenseAmount').value) || 0;
+
+            const totalWeight = logWeight + fuelWeight;
+
+            // A. การคำนวณรายได้ (จำนวนเงินที่ขายไม้ได้ + ราคาเสนอขาย)
+            const logSales = logWeight * logPrice;
+            const fuelSales = fuelWeight * fuelPrice;
+            const totalWoodSales = logSales + fuelSales;
+            const totalSales = totalWoodSales + sellingPrice; 
+
+            // B. การคำนวณค่าใช้จ่ายทั้งหมด (ข้อ 7 - 14)
+
+            // 7. ค่าล้ม/โค่น
+            let fallChopCost = 0;
+            if (fallType === 'fall') {
+                fallChopCost = raiAmount * FALL_PRICE_PER_RAI; 
+            } else if (fallType === 'chop') {
+                fallChopCost = totalWeight * CHOP_PRICE_PER_KG; 
+            }
+
+            // 8. ค่าจัดการพื้นที่ (เผา/ไถ) - คิดเป็นไร่
+            let manageCost = 0;
+            if (burnChecked) {
+                manageCost += raiAmount * burnPricePerRai;
+            }
+            if (plowChecked) {
+                manageCost += raiAmount * plowPricePerRai;
+            }
+
+            // 9-11. ค่าเครื่อง/ดับ/คีบ (คิดตามน้ำหนักรวม)
+            const machineCost = totalWeight * machinePrice;
+            const extinguishCost = totalWeight * extinguishPrice;
+            const clipCost = totalWeight * clipPrice;
+            
+            // 12. ค่าบรรทุก
+            const transportCost = (logWeight * logTransportPrice) + (fuelWeight * fuelTransportPrice);
+            
+            // 13. ค่านายหน้า
+            const brokerCost = brokerFee;
+            
+            // 14. ค่าใช้จ่ายรายวัน
+            const dailyExpenseCost = dailyExpenseDays * dailyExpenseAmount;
+
+            // รวมค่าใช้จ่ายทั้งหมด
+            const totalExpenses = fallChopCost + manageCost + machineCost + extinguishCost + clipCost + transportCost + brokerCost + dailyExpenseCost;
+
+            // C. จำนวนเงินที่สามารถซื้อได้
+            const finalPurchasePrice = totalSales - totalExpenses;
+
+            // D. แสดงผลลัพธ์
+            document.getElementById('total-wood-sales').textContent = totalSales.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            document.getElementById('total-expenses').textContent = totalExpenses.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            document.getElementById('final-purchase-price').textContent = finalPurchasePrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+            // เปิดปุ่มบันทึกเมื่อคำนวณเสร็จ
+            document.getElementById('save-button').disabled = false;
+            
+            // เก็บผลลัพธ์ใน DOM เพื่อใช้ในการบันทึก
+            const form = document.getElementById('plot-form');
+            form.dataset.logSales = logSales.toFixed(2);
+            form.dataset.fuelSales = fuelSales.toFixed(2);
+            form.dataset.totalSales = totalSales.toFixed(2);
+            form.dataset.totalExpenses = totalExpenses.toFixed(2);
+            form.dataset.finalPurchasePrice = finalPurchasePrice.toFixed(2);
+        }
+
+        // --- 3.4 ฟังก์ชันบันทึกและแสดงข้อมูล Firebase Firestore ---
+
+        document.getElementById('plot-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const user = auth.currentUser;
+
+            if (!user) {
+                alert("กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูล");
+                return;
+            }
+
+            const plotData = {
+                // ข้อมูลแปลง
+                plotName: form.plotName.value,
+                sellingPrice: parseFloat(form.sellingPrice.value),
+                raiAmount: parseFloat(form.raiAmount.value), // สำหรับ Dashboard
+
+                // น้ำหนักและราคา
+                logWeight: parseFloat(form.logWeight.value),
+                fuelWeight: parseFloat(form.fuelWeight.value),
+                logPrice: parseFloat(form.logPrice.value),
+                fuelPrice: parseFloat(form.fuelPrice.value),
+
+                // ผลการคำนวณ
+                totalSales: parseFloat(form.dataset.totalSales),
+                totalExpenses: parseFloat(form.dataset.totalExpenses),
+                finalPurchasePrice: parseFloat(form.dataset.finalPurchasePrice),
+                
+                // Meta Data
+                userId: user.uid,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            db.collection("plots").add(plotData)
+            .then(() => {
+                alert(`บันทึกข้อมูลแปลง "${plotData.plotName}" สำเร็จ!`);
+                form.reset();
+                document.getElementById('save-button').disabled = true;
+                // อัพเดท Dashboard
+                fetchPlotsData(); 
+            })
+            .catch((error) => {
+                console.error("Error adding document: ", error);
+                alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล!");
+            });
+        });
+
+        function fetchPlotsData() {
+            const dashboardDiv = document.getElementById('plots-dashboard');
+            dashboardDiv.innerHTML = '<p>กำลังโหลดข้อมูล...</p>';
+            
+            db.collection("plots").orderBy("timestamp", "desc").get()
+            .then(snapshot => {
+                if (snapshot.empty) {
+                    dashboardDiv.innerHTML = '<p>ยังไม่มีข้อมูลการคำนวณแปลง</p>';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>ชื่อแปลง</th><th>วันที่บันทึก</th><th>ขายได้รวม (บาท)</th><th>ค่าใช้จ่ายรวม (บาท)</th><th>ซื้อได้ (บาท)</th></tr></thead><tbody>';
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const finalPriceColor = data.finalPurchasePrice >= 0 ? 'green' : 'red';
+                    
+                    const date = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleDateString('th-TH') : 'N/A';
+                    
+                    html += `
+                        <tr>
+                            <td>${data.plotName} (${data.raiAmount} ไร่)</td>
+                            <td>${date}</td>
+                            <td>${data.totalSales.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+                            <td>${data.totalExpenses.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+                            <td style="font-weight: bold; color: ${finalPriceColor};">${data.finalPurchasePrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                dashboardDiv.innerHTML = html;
+            })
+            .catch(error => {
+                console.error("Error fetching documents: ", error);
+                dashboardDiv.innerHTML = '<p style="color:red;">ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบการตั้งค่า Firebase</p>';
+            });
+        }
+        
+        // --- 3.5 Initial Load Function ---
+        window.onload = function() {
+            // เมื่อโหลดหน้าเว็บเสร็จ
+            toggleFallDetails(); // ตั้งค่าการแสดงผลเริ่มต้น
+        };
+
+        // ฟังก์ชันซ่อน/แสดงรายละเอียดค่าล้ม/โค่น
+        function toggleFallDetails() {
+            const fallType = document.querySelector('input[name="fallType"]:checked').value;
+            const raiInput = document.getElementById('raiAmount');
+            // raiInput ถูกใช้สำหรับทั้งค่าล้มและค่าจัดการพื้นที่ ดังนั้นไม่ซ่อน
+            // แต่ควรแนะนำผู้ใช้
+            if (fallType === 'chop') {
+                 // raiInput.disabled = true; // ไม่ควร disable เพราะใช้ในค่าจัดการพื้นที่ด้วย
+            } else {
+                 // raiInput.disabled = false;
+            }
+        }
+
+        // เพิ่ม Event Listeners สำหรับ Checkbox ค่าจัดการพื้นที่ เพื่อไม่ให้เลือก "ไม่เผา/ไถ" พร้อมกับตัวเลือกอื่น
+        document.querySelectorAll('input[name="landManage"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const isNoneChecked = this.value === 'none' && this.checked;
+                const otherCheckboxes = document.querySelectorAll('input[name="landManage"]:not([value="none"])');
+                
+                if (isNoneChecked) {
+                    otherCheckboxes.forEach(cb => cb.checked = false);
+                } else if (this.checked) {
+                    document.querySelector('input[name="landManage"][value="none"]').checked = false;
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
