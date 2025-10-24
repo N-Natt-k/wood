@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบคำนวณราคาการซื้อไม้</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #ffffff;
+            min-height: 100%;
+        }
+        html {
+            height: 100%;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-full">
+    <div id="app" class="min-h-full">
+        <!-- หน้าเข้าสู่ระบบ -->
+        <div id="loginPage" class="min-h-full flex items-center justify-center p-4">
+            <div class="glass rounded-2xl p-8 w-full max-w-md">
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-2">🌲 ระบบคำนวณราคาไม้</h1>
+                    <p class="text-gray-600">เข้าสู่ระบบเพื่อใช้งาน</p>
+                </div>
+                
+                <form id="loginForm" class="space-y-6">
+                    <div>
+                        <label for="email" class="block text-gray-700 font-medium mb-2">อีเมล</label>
+                        <input type="email" id="email" required 
+                               class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label for="password" class="block text-gray-700 font-medium mb-2">รหัสผ่าน</label>
+                        <input type="password" id="password" required 
+                               class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <button type="submit" 
+                            class="w-full bg-gradient-to-r from-green-500 to-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:from-green-600 hover:to-blue-700 transition duration-300 transform hover:scale-105">
+                        เข้าสู่ระบบ
+                    </button>
+                </form>
+                
+                <div class="mt-6 text-center">
+                    <p class="text-gray-600 text-sm">ยังไม่มีบัญชี? 
+                        <button id="showRegister" class="text-blue-600 hover:text-blue-500 font-medium">สมัครสมาชิก</button>
+                    </p>
+                </div>
+                
+                <!-- ฟอร์มสมัครสมาชิก -->
+                <div id="registerForm" class="hidden mt-6 p-4 glass rounded-xl">
+                    <h3 class="text-gray-800 font-bold mb-4">สมัครสมาชิก</h3>
+                    <div class="space-y-4">
+                        <input type="email" id="regEmail" placeholder="อีเมล" required 
+                               class="w-full px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="password" id="regPassword" placeholder="รหัสผ่าน" required 
+                               class="w-full px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button id="registerBtn" 
+                                class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                            ส่งคำขอสมัครสมาชิก
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-xs mt-2">*รอการอนุมัติจาก nattapongkha838@gmail.com</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- หน้าหลัก -->
+        <div id="mainPage" class="hidden min-h-full">
+            <!-- Header -->
+            <header class="glass border-b border-gray-200 p-4">
+                <div class="max-w-7xl mx-auto flex justify-between items-center">
+                    <h1 class="text-2xl font-bold text-gray-800">🌲 ระบบคำนวณราคาไม้</h1>
+                    <div class="flex space-x-4">
+                        <button id="dashboardBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            📊 แดชบอร์ด
+                        </button>
+                        <button id="addPlotBtn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            ➕ เพิ่มข้อมูล
+                        </button>
+                        <button id="userManagementBtn" class="hidden bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            👥 จัดการผู้ใช้
+                        </button>
+                        <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            ออกจากระบบ
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <div id="dashboardPage" class="max-w-7xl mx-auto p-4">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">📊 แดชบอร์ด</h2>
+                    <div id="dashboard" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                        <!-- Dashboard cards will be populated here -->
+                    </div>
+                </div>
+
+                <!-- แสดงรายการแปลง -->
+                <div id="plotsList" class="space-y-4">
+                    <!-- Plots will be displayed here -->
+                </div>
+            </div>
+
+            <!-- User Management Page -->
+            <div id="userManagementPage" class="hidden max-w-7xl mx-auto p-4">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">👥 จัดการผู้ใช้</h2>
+                    
+                    <!-- สถิติผู้ใช้ -->
+                    <div id="userStats" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <!-- User stats will be populated here -->
+                    </div>
+                    
+                    <!-- รายการผู้ใช้ -->
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">รายการผู้ใช้ทั้งหมด</h3>
+                        <div id="usersList" class="space-y-4">
+                            <!-- Users will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Plot Page -->
+            <div id="addPlotPage" class="hidden max-w-7xl mx-auto p-4">
+                <!-- เพิ่มข้อมูลแปลง -->
+                <div class="glass rounded-2xl p-6 mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">➕ เพิ่มข้อมูลแปลงใหม่</h2>
+                    
+                    <form id="plotForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label for="plotName" class="block text-gray-700 font-medium mb-2">ชื่อแปลง</label>
+                                <input type="text" id="plotName" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="plotArea" class="block text-gray-700 font-medium mb-2">จำนวนไร่</label>
+                                <input type="number" id="plotArea" step="0.01" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="offerPrice" class="block text-gray-700 font-medium mb-2">ราคาที่เสนอขาย (บาท)</label>
+                                <input type="number" id="offerPrice" step="0.01" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="logWeight" class="block text-gray-700 font-medium mb-2">น้ำหนักไม้ท่อน (กก.)</label>
+                                <input type="number" id="logWeight" step="0.01" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="firewoodWeight" class="block text-gray-700 font-medium mb-2">น้ำหนักไม้ฟืน (กก.)</label>
+                                <input type="number" id="firewoodWeight" step="0.01" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="logPrice" class="block text-gray-700 font-medium mb-2">ราคาไม้ท่อน (บาท/กก.)</label>
+                                <input type="number" id="logPrice" step="0.01" value="2.00" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="firewoodPrice" class="block text-gray-700 font-medium mb-2">ราคาไม้ฟืน (บาท/กก.)</label>
+                                <input type="number" id="firewoodPrice" step="0.01" value="1.00" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- ตัวเลือกล้ม/โค่น -->
+                        <div class="glass rounded-xl p-4">
+                            <label class="block text-gray-700 font-medium mb-3">วิธีการตัด</label>
+                            <div class="space-y-3">
+                                <label class="flex items-center text-gray-700">
+                                    <input type="radio" name="cuttingMethod" value="fell" class="mr-3">
+                                    <span>ล้ม (คิดเป็นไร่)</span>
+                                </label>
+                                <input type="number" id="fellPrice" step="0.01" value="3000" placeholder="บาท/ไร่" 
+                                       class="ml-6 px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                
+                                <label class="flex items-center text-gray-700">
+                                    <input type="radio" name="cuttingMethod" value="cut" class="mr-3">
+                                    <span>โค่น (คิดตามน้ำหนัก)</span>
+                                </label>
+                                <input type="number" id="cutPrice" step="0.01" value="0.12" placeholder="บาท/กก." 
+                                       class="ml-6 px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- ตัวเลือกเผา/ไถ -->
+                        <div class="glass rounded-xl p-4">
+                            <label class="block text-gray-700 font-medium mb-3">การจัดการหลังตัด</label>
+                            <div class="space-y-3">
+                                <label class="flex items-center text-gray-700">
+                                    <input type="checkbox" id="burn" class="mr-3">
+                                    <span>เผา</span>
+                                </label>
+                                <input type="number" id="burnPrice" step="0.01" placeholder="บาท/ไร่" 
+                                       class="ml-6 px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                
+                                <label class="flex items-center text-gray-700">
+                                    <input type="checkbox" id="plow" class="mr-3">
+                                    <span>ไถ</span>
+                                </label>
+                                <input type="number" id="plowPrice" step="0.01" placeholder="บาท/ไร่" 
+                                       class="ml-6 px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- ค่าใช้จ่ายต่างๆ -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="machinePrice" class="block text-gray-700 font-medium mb-2">ค่าเครื่อง (บาท/กก.)</label>
+                                <input type="number" id="machinePrice" step="0.01" value="0.12" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="extinguishPrice" class="block text-gray-700 font-medium mb-2">ค่าดับ (บาท/กก.)</label>
+                                <input type="number" id="extinguishPrice" step="0.01" value="0.06" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="clampPrice" class="block text-gray-700 font-medium mb-2">ค่าคีบ (บาท/กก.)</label>
+                                <input type="number" id="clampPrice" step="0.01" value="0.06" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="brokerFee" class="block text-gray-700 font-medium mb-2">ค่านายหน้า (บาท)</label>
+                                <input type="number" id="brokerFee" step="0.01" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="logTransportPrice" class="block text-gray-700 font-medium mb-2">ค่าบรรทุกไม้ท่อน (บาท/กก.)</label>
+                                <input type="number" id="logTransportPrice" step="0.01" value="0.18" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="firewoodTransportPrice" class="block text-gray-700 font-medium mb-2">ค่าบรรทุกไม้ฟืน (บาท/กก.)</label>
+                                <input type="number" id="firewoodTransportPrice" step="0.01" value="0.15" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="workDays" class="block text-gray-700 font-medium mb-2">จำนวนวันทำงาน</label>
+                                <input type="number" id="workDays" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="dailyExpense" class="block text-gray-700 font-medium mb-2">ค่าใช้จ่าย/วัน (บาท)</label>
+                                <input type="number" id="dailyExpense" step="0.01" value="400" required 
+                                       class="w-full px-4 py-3 rounded-xl bg-white border border-gray-300 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <button type="submit" 
+                                class="w-full bg-gradient-to-r from-green-500 to-blue-600 text-white font-bold py-4 px-6 rounded-xl hover:from-green-600 hover:to-blue-700 transition duration-300 transform hover:scale-105">
+                            💾 บันทึกข้อมูลแปลง
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <footer class="glass border-t border-gray-200 p-4 mt-8">
+                <div class="text-center text-gray-600">
+                    &copy; Nattapong Khawnuy | นายณัฐพงศ์ ขาวนุ้ย
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCQHC4eKzfx58hRIcoCe_T9-mQ0TP8sdfM",
+            authDomain: "natt-wood.firebaseapp.com",
+            projectId: "natt-wood",
+            storageBucket: "natt-wood.firebasestorage.app",
+            messagingSenderId: "933382154771",
+            appId: "1:933382154771:web:d3dc315e622fcbb9c7ede6",
+            measurementId: "G-HR13T9WFSN"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // DOM Elements
+        const loginPage = document.getElementById('loginPage');
+        const mainPage = document.getElementById('mainPage');
+        const dashboardPage = document.getElementById('dashboardPage');
+        const addPlotPage = document.getElementById('addPlotPage');
+        const userManagementPage = document.getElementById('userManagementPage');
+        const loginForm = document.getElementById('loginForm');
+        const plotForm = document.getElementById('plotForm');
+        const showRegisterBtn = document.getElementById('showRegister');
+        const registerForm = document.getElementById('registerForm');
+        const registerBtn = document.getElementById('registerBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const dashboardBtn = document.getElementById('dashboardBtn');
+        const addPlotBtn = document.getElementById('addPlotBtn');
+        const userManagementBtn = document.getElementById('userManagementBtn');
+        const dashboard = document.getElementById('dashboard');
+        const plotsList = document.getElementById('plotsList');
+        const userStats = document.getElementById('userStats');
+        const usersList = document.getElementById('usersList');
+
+        // Page Navigation
+        function showDashboard() {
+            dashboardPage.classList.remove('hidden');
+            addPlotPage.classList.add('hidden');
+            userManagementPage.classList.add('hidden');
+        }
+
+        function showAddPlot() {
+            dashboardPage.classList.add('hidden');
+            addPlotPage.classList.remove('hidden');
+            userManagementPage.classList.add('hidden');
+        }
+
+        function showUserManagement() {
+            dashboardPage.classList.add('hidden');
+            addPlotPage.classList.add('hidden');
+            userManagementPage.classList.remove('hidden');
+            loadUsers();
+        }
+
+        // Auth State Observer
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                // ตรวจสอบสถานะการอนุมัติก่อนแสดงหน้าหลัก
+                const canAccess = await checkUserApproval(user);
+                
+                if (canAccess) {
+                    loginPage.classList.add('hidden');
+                    mainPage.classList.remove('hidden');
+                    
+                    // ตรวจสอบว่าเป็นผู้ดูแลหรือไม่
+                    if (user.email === 'nattapongkha838@gmail.com') {
+                        userManagementBtn.classList.remove('hidden');
+                    } else {
+                        userManagementBtn.classList.add('hidden');
+                    }
+                    
+                    showDashboard();
+                    loadPlots();
+                } else {
+                    loginPage.classList.remove('hidden');
+                    mainPage.classList.add('hidden');
+                }
+            } else {
+                loginPage.classList.remove('hidden');
+                mainPage.classList.add('hidden');
+            }
+        });
+
+        // Login Form
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                alert('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
+            }
+        });
+
+        // Show Register Form
+        showRegisterBtn.addEventListener('click', () => {
+            registerForm.classList.toggle('hidden');
+        });
+
+        // Register
+        registerBtn.addEventListener('click', async () => {
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+
+            try {
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // บันทึกข้อมูลผู้ใช้ใน Firestore
+                await db.collection('users').doc(user.uid).set({
+                    email: user.email,
+                    approved: false,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    role: 'user'
+                });
+                
+                alert('สมัครสมาชิกสำเร็จ! รอการอนุมัติจากผู้ดูแลระบบ');
+                registerForm.classList.add('hidden');
+                
+                // ออกจากระบบทันทีหลังสมัครสมาชิก
+                await auth.signOut();
+            } catch (error) {
+                alert('สมัครสมาชิกไม่สำเร็จ: ' + error.message);
+            }
+        });
+
+        // Navigation Events
+        dashboardBtn.addEventListener('click', showDashboard);
+        addPlotBtn.addEventListener('click', showAddPlot);
+        userManagementBtn.addEventListener('click', showUserManagement);
+
+        // Logout
+        logoutBtn.addEventListener('click', () => {
+            auth.signOut();
+        });
+
+        // Plot Form
+        plotForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const plotData = {
+                plotName: document.getElementById('plotName').value,
+                plotArea: parseFloat(document.getElementById('plotArea').value) || 0,
+                offerPrice: parseFloat(document.getElementById('offerPrice').value),
+                logWeight: parseFloat(document.getElementById('logWeight').value),
+                firewoodWeight: parseFloat(document.getElementById('firewoodWeight').value),
+                logPrice: parseFloat(document.getElementById('logPrice').value),
+                firewoodPrice: parseFloat(document.getElementById('firewoodPrice').value),
+                cuttingMethod: document.querySelector('input[name="cuttingMethod"]:checked')?.value || '',
+                fellPrice: parseFloat(document.getElementById('fellPrice').value) || 0,
+                cutPrice: parseFloat(document.getElementById('cutPrice').value) || 0,
+                burn: document.getElementById('burn').checked,
+                burnPrice: parseFloat(document.getElementById('burnPrice').value) || 0,
+                plow: document.getElementById('plow').checked,
+                plowPrice: parseFloat(document.getElementById('plowPrice').value) || 0,
+                machinePrice: parseFloat(document.getElementById('machinePrice').value),
+                extinguishPrice: parseFloat(document.getElementById('extinguishPrice').value),
+                clampPrice: parseFloat(document.getElementById('clampPrice').value),
+                logTransportPrice: parseFloat(document.getElementById('logTransportPrice').value),
+                firewoodTransportPrice: parseFloat(document.getElementById('firewoodTransportPrice').value),
+                brokerFee: parseFloat(document.getElementById('brokerFee').value),
+                workDays: parseInt(document.getElementById('workDays').value),
+                dailyExpense: parseFloat(document.getElementById('dailyExpense').value),
+                userId: auth.currentUser.uid
+            };
+
+            // Calculate totals
+            const calculations = calculateTotals(plotData);
+            plotData.calculations = calculations;
+
+            try {
+                const editId = plotForm.dataset.editId;
+                if (editId) {
+                    // อัปเดตข้อมูล
+                    plotData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                    await db.collection('plots').doc(editId).update(plotData);
+                    alert('อัปเดตข้อมูลสำเร็จ!');
+                    
+                    // รีเซ็ตฟอร์ม
+                    delete plotForm.dataset.editId;
+                    const submitBtn = plotForm.querySelector('button[type="submit"]');
+                    submitBtn.innerHTML = '💾 บันทึกข้อมูลแปลง';
+                } else {
+                    // เพิ่มข้อมูลใหม่
+                    plotData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    await db.collection('plots').add(plotData);
+                    alert('บันทึกข้อมูลสำเร็จ!');
+                }
+                
+                plotForm.reset();
+                loadPlots();
+                showDashboard();
+            } catch (error) {
+                alert('บันทึกข้อมูลไม่สำเร็จ: ' + error.message);
+            }
+        });
+
+        // Calculate Totals
+        function calculateTotals(data) {
+            const totalWeight = data.logWeight + data.firewoodWeight;
+            
+            // รายได้จากการขายไม้
+            const logRevenue = data.logWeight * data.logPrice;
+            const firewoodRevenue = data.firewoodWeight * data.firewoodPrice;
+            const totalRevenue = logRevenue + firewoodRevenue;
+            
+            // ค่าใช้จ่าย
+            let cuttingCost = 0;
+            if (data.cuttingMethod === 'fell') {
+                cuttingCost = data.plotArea * data.fellPrice; // จำนวนไร่ * ราคาที่ใส่
+            } else if (data.cuttingMethod === 'cut') {
+                cuttingCost = totalWeight * data.cutPrice;
+            }
+            
+            const burnCost = data.burn ? (data.plotArea * data.burnPrice) : 0; // จำนวนไร่ * ราคาที่ใส่
+            const plowCost = data.plow ? (data.plotArea * data.plowPrice) : 0; // จำนวนไร่ * ราคาที่ใส่
+            const machineCost = totalWeight * data.machinePrice;
+            const extinguishCost = totalWeight * data.extinguishPrice;
+            const clampCost = totalWeight * data.clampPrice;
+            const logTransportCost = data.logWeight * data.logTransportPrice;
+            const firewoodTransportCost = data.firewoodWeight * data.firewoodTransportPrice;
+            const dailyExpenseCost = data.workDays * data.dailyExpense;
+            
+            const totalExpenses = cuttingCost + burnCost + plowCost + machineCost + 
+                                extinguishCost + clampCost + logTransportCost + 
+                                firewoodTransportCost + data.brokerFee + dailyExpenseCost;
+            
+            const netProfit = totalRevenue - totalExpenses;
+            const canAfford = netProfit >= data.offerPrice;
+            const maxAffordablePrice = netProfit; // ราคาที่สามารถซื้อได้
+            
+            return {
+                totalWeight,
+                logRevenue,
+                firewoodRevenue,
+                totalRevenue,
+                cuttingCost,
+                burnCost,
+                plowCost,
+                machineCost,
+                extinguishCost,
+                clampCost,
+                logTransportCost,
+                firewoodTransportCost,
+                dailyExpenseCost,
+                totalExpenses,
+                netProfit,
+                canAfford,
+                maxAffordablePrice
+            };
+        }
+
+        // Load Plots
+        async function loadPlots() {
+            try {
+                // โหลดข้อมูลแปลงทั้งหมด (ไม่กรองตาม userId)
+                const snapshot = await db.collection('plots').get();
+                
+                // เรียงลำดับตามวันที่สร้าง
+                const sortedDocs = snapshot.docs.sort((a, b) => {
+                    const aTime = a.data().createdAt;
+                    const bTime = b.data().createdAt;
+                    if (!aTime) return 1;
+                    if (!bTime) return -1;
+                    return bTime.toDate() - aTime.toDate();
+                });
+                
+                displayDashboard(sortedDocs);
+                displayPlots(sortedDocs);
+            } catch (error) {
+                console.error('Error loading plots:', error);
+                // ถ้าไม่มี index ให้โหลดแบบไม่เรียงลำดับ
+                try {
+                    const snapshot = await db.collection('plots').get();
+                    
+                    displayDashboard(snapshot.docs);
+                    displayPlots(snapshot.docs);
+                } catch (fallbackError) {
+                    console.error('Fallback error:', fallbackError);
+                    alert('ไม่สามารถโหลดข้อมูลแปลงได้');
+                }
+            }
+        }
+
+        // Display Dashboard
+        function displayDashboard(docs) {
+            const totalPlots = docs.length;
+            const profitablePlots = docs.filter(doc => doc.data().calculations.canAfford).length;
+            const unprofitablePlots = totalPlots - profitablePlots;
+            
+            dashboard.innerHTML = `
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-blue-600">${totalPlots}</div>
+                        <div class="text-gray-600">จำนวนแปลงทั้งหมด</div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-green-600">${profitablePlots}</div>
+                        <div class="text-gray-600">แปลงที่ซื้อได้</div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-red-600">${unprofitablePlots}</div>
+                        <div class="text-gray-600">แปลงที่ซื้อไม่ได้</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Display Plots
+        async function displayPlots(docs) {
+            if (docs.length === 0) {
+                plotsList.innerHTML = `
+                    <div class="glass rounded-xl p-8 text-center">
+                        <div class="text-gray-500 text-lg mb-4">🌲 ยังไม่มีข้อมูลแปลง</div>
+                        <p class="text-gray-400 mb-6">เริ่มต้นโดยการเพิ่มข้อมูลแปลงแรกของคุณ</p>
+                        <button onclick="showAddPlot()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg transition duration-300">
+                            ➕ เพิ่มข้อมูลแปลง
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // โหลดข้อมูลผู้ใช้เพื่อแสดงชื่อเจ้าของแปลง
+            const userPromises = docs.map(async doc => {
+                const data = doc.data();
+                let ownerEmail = 'ไม่ระบุ';
+                
+                try {
+                    if (data.userId) {
+                        const userDoc = await db.collection('users').doc(data.userId).get();
+                        if (userDoc.exists) {
+                            ownerEmail = userDoc.data().email;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading user data:', error);
+                }
+                
+                return { doc, ownerEmail };
+            });
+            
+            const plotsWithOwners = await Promise.all(userPromises);
+            
+            plotsList.innerHTML = plotsWithOwners.map(({ doc, ownerEmail }) => {
+                const data = doc.data();
+                const calc = data.calculations;
+                const isOwner = data.userId === auth.currentUser.uid;
+                
+                return `
+                    <div class="glass rounded-xl p-6 card-hover" data-plot-id="${doc.id}">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-800">${data.plotName}</h3>
+                                <div class="text-sm text-gray-600">จำนวน: ${data.plotArea || 'ไม่ระบุ'} ไร่</div>
+                                <div class="text-xs text-gray-500 mt-1">เจ้าของ: ${ownerEmail}</div>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-sm font-medium ${calc.canAfford ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}">
+                                ${calc.canAfford ? '✅ ซื้อได้' : '❌ ซื้อไม่ได้'}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="text-gray-600 text-sm">ราคาที่เสนอขาย</div>
+                                <div class="text-gray-800 font-bold text-lg">${data.offerPrice.toLocaleString()} บาท</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="text-gray-600 text-sm">รายได้จากขายไม้</div>
+                                <div class="text-green-600 font-bold text-lg">${calc.totalRevenue.toLocaleString()} บาท</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="text-gray-600 text-sm">ค่าใช้จ่ายรวม</div>
+                                <div class="text-red-600 font-bold text-lg">${calc.totalExpenses.toLocaleString()} บาท</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                            <div class="text-gray-600 text-sm">ราคาที่สามารถซื้อได้</div>
+                            <div class="font-bold text-2xl ${calc.maxAffordablePrice >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                ${calc.maxAffordablePrice.toLocaleString()} บาท
+                            </div>
+                        </div>
+                        
+                        <div class="text-gray-500 text-sm mb-4">
+                            น้ำหนักรวม: ${calc.totalWeight.toLocaleString()} กก. | 
+                            ไม้ท่อน: ${data.logWeight.toLocaleString()} กก. | 
+                            ไม้ฟืน: ${data.firewoodWeight.toLocaleString()} กก.
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <button onclick="viewPlotDetails('${doc.id}')" 
+                                    class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                                👁️ ดูรายละเอียด
+                            </button>
+                            ${(isOwner || auth.currentUser.email === 'nattapongkha838@gmail.com') ? `
+                                <button onclick="editPlot('${doc.id}')" 
+                                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                                    ✏️ แก้ไข
+                                </button>
+                                <button onclick="deletePlot('${doc.id}')" 
+                                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                                    🗑️ ลบ
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Delete Plot
+        async function deletePlot(plotId) {
+            // สร้าง modal ยืนยันการลบแบบ inline
+            const plotElement = document.querySelector(`[data-plot-id="${plotId}"]`);
+            if (!plotElement) return;
+            
+            const originalContent = plotElement.innerHTML;
+            
+            plotElement.innerHTML = `
+                <div class="glass rounded-xl p-6 border-2 border-red-300 bg-red-50">
+                    <div class="text-center">
+                        <div class="text-red-600 text-xl mb-4">⚠️ ยืนยันการลบ</div>
+                        <p class="text-gray-700 mb-6">คุณแน่ใจหรือไม่ที่จะลบข้อมูลแปลงนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+                        <div class="flex space-x-4 justify-center">
+                            <button onclick="confirmDelete('${plotId}')" 
+                                    class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg transition duration-300">
+                                🗑️ ลบแน่นอน
+                            </button>
+                            <button onclick="cancelDelete('${plotId}', \`${originalContent.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" 
+                                    class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition duration-300">
+                                ❌ ยกเลิก
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Confirm Delete
+        async function confirmDelete(plotId) {
+            try {
+                await db.collection('plots').doc(plotId).delete();
+                alert('ลบข้อมูลแปลงสำเร็จ!');
+                loadPlots();
+            } catch (error) {
+                alert('ลบข้อมูลไม่สำเร็จ: ' + error.message);
+                loadPlots(); // โหลดใหม่เพื่อกู้คืนสถานะ
+            }
+        }
+        
+        // Cancel Delete
+        function cancelDelete(plotId, originalContent) {
+            const plotElement = document.querySelector(`[data-plot-id="${plotId}"]`);
+            if (plotElement) {
+                plotElement.innerHTML = originalContent;
+            }
+        }
+
+        // Check User Approval
+        async function checkUserApproval(user) {
+            if (user.email === 'nattapongkha838@gmail.com') {
+                // ผู้ดูแลระบบไม่ต้องตรวจสอบการอนุมัติ
+                return true;
+            }
+            
+            try {
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    if (!userData.approved) {
+                        alert('บัญชีของคุณยังไม่ได้รับการอนุมัติจากผู้ดูแลระบบ กรุณารอการอนุมัติ');
+                        await auth.signOut();
+                        return false;
+                    }
+                    return true;
+                } else {
+                    // สร้างข้อมูลผู้ใช้ใหม่สำหรับผู้ใช้เก่าที่ยังไม่มีข้อมูลใน Firestore
+                    const isAdmin = user.email === 'nattapongkha838@gmail.com';
+                    await db.collection('users').doc(user.uid).set({
+                        email: user.email,
+                        approved: isAdmin, // ผู้ดูแลอนุมัติทันที ผู้ใช้ทั่วไปต้องรอ
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        role: isAdmin ? 'admin' : 'user'
+                    });
+                    
+                    if (!isAdmin) {
+                        alert('บัญชีของคุณยังไม่ได้รับการอนุมัติจากผู้ดูแลระบบ กรุณารอการอนุมัติ');
+                        await auth.signOut();
+                        return false;
+                    }
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error checking user approval:', error);
+                return false;
+            }
+        }
+
+        // Load Users (Admin only)
+        async function loadUsers() {
+            if (auth.currentUser.email !== 'nattapongkha838@gmail.com') {
+                alert('คุณไม่มีสิทธิ์เข้าถึงหน้านี้');
+                return;
+            }
+            
+            try {
+                const snapshot = await db.collection('users').get();
+                const docs = snapshot.docs.sort((a, b) => {
+                    const aTime = a.data().createdAt;
+                    const bTime = b.data().createdAt;
+                    if (!aTime) return 1;
+                    if (!bTime) return -1;
+                    return bTime.toDate() - aTime.toDate();
+                });
+                
+                displayUserStats(docs);
+                displayUsers(docs);
+            } catch (error) {
+                console.error('Error loading users:', error);
+                alert('ไม่สามารถโหลดข้อมูลผู้ใช้ได้: ' + error.message);
+            }
+        }
+
+        // Display User Stats
+        function displayUserStats(docs) {
+            const totalUsers = docs.length;
+            const approvedUsers = docs.filter(doc => doc.data().approved).length;
+            const pendingUsers = totalUsers - approvedUsers;
+            
+            userStats.innerHTML = `
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-blue-600">${totalUsers}</div>
+                        <div class="text-gray-600">ผู้ใช้ทั้งหมด</div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-green-600">${approvedUsers}</div>
+                        <div class="text-gray-600">ผู้ใช้ที่อนุมัติแล้ว</div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-orange-600">${pendingUsers}</div>
+                        <div class="text-gray-600">รอการอนุมัติ</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Display Users
+        function displayUsers(docs) {
+            usersList.innerHTML = docs.map(doc => {
+                const userData = doc.data();
+                const userId = doc.id;
+                
+                return `
+                    <div class="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center">
+                        <div class="flex-1">
+                            <div class="font-medium text-gray-800">${userData.email}</div>
+                            <div class="text-sm text-gray-500">
+                                สมัครเมื่อ: ${userData.createdAt ? new Date(userData.createdAt.toDate()).toLocaleDateString('th-TH') : 'ไม่ระบุ'}
+                            </div>
+                            <div class="text-sm">
+                                <span class="px-2 py-1 rounded-full text-xs ${userData.approved ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}">
+                                    ${userData.approved ? '✅ อนุมัติแล้ว' : '⏳ รอการอนุมัติ'}
+                                </span>
+                                <span class="ml-2 px-2 py-1 rounded-full text-xs ${userData.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}">
+                                    ${userData.role === 'admin' ? '👑 ผู้ดูแล' : '👤 ผู้ใช้'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            ${!userData.approved ? `
+                                <button onclick="approveUser('${userId}')" 
+                                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition duration-300">
+                                    ✅ อนุมัติ
+                                </button>
+                            ` : ''}
+                            ${userData.email !== 'nattapongkha838@gmail.com' ? `
+                                <button onclick="deleteUser('${userId}')" 
+                                        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition duration-300">
+                                    🗑️ ลบ
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Approve User
+        async function approveUser(userId) {
+            try {
+                await db.collection('users').doc(userId).update({
+                    approved: true
+                });
+                alert('อนุมัติผู้ใช้สำเร็จ!');
+                loadUsers();
+            } catch (error) {
+                alert('อนุมัติผู้ใช้ไม่สำเร็จ: ' + error.message);
+            }
+        }
+
+        // Delete User
+        async function deleteUser(userId) {
+            if (confirm('คุณต้องการลบผู้ใช้นี้หรือไม่?')) {
+                try {
+                    await db.collection('users').doc(userId).delete();
+                    alert('ลบผู้ใช้สำเร็จ!');
+                    loadUsers();
+                } catch (error) {
+                    alert('ลบผู้ใช้ไม่สำเร็จ: ' + error.message);
+                }
+            }
+        }
+
+        // Edit Plot
+        async function editPlot(plotId) {
+            try {
+                const doc = await db.collection('plots').doc(plotId).get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    
+                    // เติมข้อมูลในฟอร์ม
+                    document.getElementById('plotName').value = data.plotName;
+                    document.getElementById('plotArea').value = data.plotArea || '';
+                    document.getElementById('offerPrice').value = data.offerPrice;
+                    document.getElementById('logWeight').value = data.logWeight;
+                    document.getElementById('firewoodWeight').value = data.firewoodWeight;
+                    document.getElementById('logPrice').value = data.logPrice;
+                    document.getElementById('firewoodPrice').value = data.firewoodPrice;
+                    document.getElementById('fellPrice').value = data.fellPrice;
+                    document.getElementById('cutPrice').value = data.cutPrice;
+                    document.getElementById('burnPrice').value = data.burnPrice;
+                    document.getElementById('plowPrice').value = data.plowPrice;
+                    document.getElementById('machinePrice').value = data.machinePrice;
+                    document.getElementById('extinguishPrice').value = data.extinguishPrice;
+                    document.getElementById('clampPrice').value = data.clampPrice;
+                    document.getElementById('brokerFee').value = data.brokerFee;
+                    document.getElementById('logTransportPrice').value = data.logTransportPrice;
+                    document.getElementById('firewoodTransportPrice').value = data.firewoodTransportPrice;
+                    document.getElementById('workDays').value = data.workDays;
+                    document.getElementById('dailyExpense').value = data.dailyExpense;
+                    
+                    // เลือก radio button
+                    if (data.cuttingMethod) {
+                        document.querySelector(`input[name="cuttingMethod"][value="${data.cuttingMethod}"]`).checked = true;
+                    }
+                    
+                    // เลือก checkbox
+                    document.getElementById('burn').checked = data.burn;
+                    document.getElementById('plow').checked = data.plow;
+                    
+                    // เก็บ ID สำหรับการอัปเดต
+                    plotForm.dataset.editId = plotId;
+                    
+                    // เปลี่ยนข้อความปุ่ม
+                    const submitBtn = plotForm.querySelector('button[type="submit"]');
+                    submitBtn.innerHTML = '💾 อัปเดตข้อมูลแปลง';
+                    
+                    // ไปที่หน้าเพิ่มข้อมูล
+                    showAddPlot();
+                }
+            } catch (error) {
+                alert('โหลดข้อมูลแปลงไม่สำเร็จ: ' + error.message);
+            }
+        }
+
+        // View Plot Details
+        async function viewPlotDetails(plotId) {
+            try {
+                const doc = await db.collection('plots').doc(plotId).get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    const calc = data.calculations;
+                    
+                    // โหลดข้อมูลเจ้าของแปลง
+                    let ownerEmail = 'ไม่ระบุ';
+                    if (data.userId) {
+                        try {
+                            const userDoc = await db.collection('users').doc(data.userId).get();
+                            if (userDoc.exists) {
+                                ownerEmail = userDoc.data().email;
+                            }
+                        } catch (error) {
+                            console.error('Error loading owner data:', error);
+                        }
+                    }
+                    
+                    // สร้าง modal แสดงรายละเอียด
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50';
+                    modal.innerHTML = `
+                        <div class="glass rounded-2xl p-6 max-w-4xl w-full max-h-full overflow-y-auto">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-2xl font-bold text-gray-800">📋 รายละเอียดแปลง: ${data.plotName}</h2>
+                                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">ข้อมูลทั่วไป</h3>
+                                    <div class="space-y-2">
+                                        <div><span class="font-medium">ชื่อแปลง:</span> ${data.plotName}</div>
+                                        <div><span class="font-medium">เจ้าของ:</span> ${ownerEmail}</div>
+                                        <div><span class="font-medium">จำนวนไร่:</span> ${data.plotArea || 'ไม่ระบุ'} ไร่</div>
+                                        <div><span class="font-medium">ราคาที่เสนอขาย:</span> ${data.offerPrice.toLocaleString()} บาท</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">น้ำหนักไม้</h3>
+                                    <div class="space-y-2">
+                                        <div><span class="font-medium">ไม้ท่อน:</span> ${data.logWeight.toLocaleString()} กก.</div>
+                                        <div><span class="font-medium">ไม้ฟืน:</span> ${data.firewoodWeight.toLocaleString()} กก.</div>
+                                        <div><span class="font-medium">น้ำหนักรวม:</span> ${calc.totalWeight.toLocaleString()} กก.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">ราคาขายไม้</h3>
+                                    <div class="space-y-2">
+                                        <div><span class="font-medium">ราคาไม้ท่อน:</span> ${data.logPrice} บาท/กก.</div>
+                                        <div><span class="font-medium">ราคาไม้ฟืน:</span> ${data.firewoodPrice} บาท/กก.</div>
+                                        <div class="text-green-600 font-bold"><span class="font-medium">รายได้รวม:</span> ${calc.totalRevenue.toLocaleString()} บาท</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">วิธีการตัด</h3>
+                                    <div class="space-y-2">
+                                        ${data.cuttingMethod === 'fell' ? 
+                                            `<div><span class="font-medium">วิธี:</span> ล้ม (${data.fellPrice} บาท/ไร่)</div>
+                                             <div><span class="font-medium">ค่าตัด:</span> ${calc.cuttingCost.toLocaleString()} บาท</div>` :
+                                            data.cuttingMethod === 'cut' ?
+                                            `<div><span class="font-medium">วิธี:</span> โค่น (${data.cutPrice} บาท/กก.)</div>
+                                             <div><span class="font-medium">ค่าตัด:</span> ${calc.cuttingCost.toLocaleString()} บาท</div>` :
+                                            '<div>ไม่ระบุวิธีการตัด</div>'
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">การจัดการหลังตัด</h3>
+                                    <div class="space-y-2">
+                                        <div><span class="font-medium">เผา:</span> ${data.burn ? `ใช่ (${data.burnPrice} บาท/ไร่) = ${calc.burnCost.toLocaleString()} บาท` : 'ไม่เผา'}</div>
+                                        <div><span class="font-medium">ไถ:</span> ${data.plow ? `ใช่ (${data.plowPrice} บาท/ไร่) = ${calc.plowCost.toLocaleString()} บาท` : 'ไม่ไถ'}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">ค่าใช้จ่ายอื่นๆ</h3>
+                                    <div class="space-y-2">
+                                        <div><span class="font-medium">ค่าเครื่อง:</span> ${calc.machineCost.toLocaleString()} บาท</div>
+                                        <div><span class="font-medium">ค่าดับ:</span> ${calc.extinguishCost.toLocaleString()} บาท</div>
+                                        <div><span class="font-medium">ค่าคีบ:</span> ${calc.clampCost.toLocaleString()} บาท</div>
+                                        <div><span class="font-medium">ค่านายหน้า:</span> ${data.brokerFee.toLocaleString()} บาท</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">ค่าบรรทุก</h3>
+                                    <div class="space-y-2">
+                                        <div><span class="font-medium">บรรทุกไม้ท่อน:</span> ${calc.logTransportCost.toLocaleString()} บาท</div>
+                                        <div><span class="font-medium">บรรทุกไม้ฟืน:</span> ${calc.firewoodTransportCost.toLocaleString()} บาท</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">ค่าใช้จ่ายรายวัน</h3>
+                                    <div class="space-y-2">
+                                        <div><span class="font-medium">จำนวนวัน:</span> ${data.workDays} วัน</div>
+                                        <div><span class="font-medium">ค่าใช้จ่าย/วัน:</span> ${data.dailyExpense.toLocaleString()} บาท</div>
+                                        <div><span class="font-medium">รวม:</span> ${calc.dailyExpenseCost.toLocaleString()} บาท</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6">
+                                <h3 class="text-xl font-bold text-gray-800 mb-4">📊 สรุปการคำนวณ</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="text-center p-4 bg-green-100 rounded-lg">
+                                        <div class="text-green-600 font-bold text-xl">${calc.totalRevenue.toLocaleString()}</div>
+                                        <div class="text-gray-600 text-sm">รายได้รวม (บาท)</div>
+                                    </div>
+                                    <div class="text-center p-4 bg-red-100 rounded-lg">
+                                        <div class="text-red-600 font-bold text-xl">${calc.totalExpenses.toLocaleString()}</div>
+                                        <div class="text-gray-600 text-sm">ค่าใช้จ่ายรวม (บาท)</div>
+                                    </div>
+                                    <div class="text-center p-4 ${calc.maxAffordablePrice >= 0 ? 'bg-blue-100' : 'bg-red-100'} rounded-lg">
+                                        <div class="${calc.maxAffordablePrice >= 0 ? 'text-blue-600' : 'text-red-600'} font-bold text-xl">${calc.maxAffordablePrice.toLocaleString()}</div>
+                                        <div class="text-gray-600 text-sm">ราคาที่ซื้อได้ (บาท)</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 text-center">
+                                    <div class="text-lg">
+                                        <span class="font-medium">ราคาที่เสนอขาย:</span> 
+                                        <span class="text-gray-800 font-bold">${data.offerPrice.toLocaleString()} บาท</span>
+                                    </div>
+                                    <div class="mt-2">
+                                        <span class="px-4 py-2 rounded-full text-lg font-bold ${calc.canAfford ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}">
+                                            ${calc.canAfford ? '✅ ซื้อได้' : '❌ ซื้อไม่ได้'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-6 text-center">
+                                <button onclick="closeModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition duration-300">
+                                    ปิด
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(modal);
+                    
+                    // ฟังก์ชันปิด modal
+                    window.closeModal = function() {
+                        document.body.removeChild(modal);
+                        delete window.closeModal;
+                    };
+                    
+                    // ปิด modal เมื่อคลิกพื้นหลัง
+                    modal.addEventListener('click', function(e) {
+                        if (e.target === modal) {
+                            closeModal();
+                        }
+                    });
+                }
+            } catch (error) {
+                alert('โหลดรายละเอียดแปลงไม่สำเร็จ: ' + error.message);
+            }
+        }
+
+        // Make functions available globally
+        window.deletePlot = deletePlot;
+        window.confirmDelete = confirmDelete;
+        window.cancelDelete = cancelDelete;
+        window.editPlot = editPlot;
+        window.viewPlotDetails = viewPlotDetails;
+        window.approveUser = approveUser;
+        window.deleteUser = deleteUser;
+        window.showAddPlot = showAddPlot;
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'99393c7515f27325',t:'MTc2MTMwNjQxMi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
